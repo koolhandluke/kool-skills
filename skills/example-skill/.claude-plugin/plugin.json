@@ -1,0 +1,7 @@
+{
+  "name": "example-skill",
+  "description": "An example skill showing the expected structure for this repo",
+  "version": "1.0.0",
+  "author": { "name": "Kostas Morfis" },
+  "license": "MIT"
+}

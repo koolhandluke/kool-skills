@@ -1,0 +1,15 @@
+jira:
+  base_url: ""           # e.g. https://yourorg.atlassian.net
+  token: ""              # Jira API token
+  user_email: ""         # Your Atlassian account email
+
+github:
+  org: ""                # GitHub org (e.g. netskope)
+  username: ""           # Your GitHub username
+
+slack:
+  channel: ""            # e.g. #kn-staging-status
+  post_as_draft: true    # Post to Slack for review before publishing
+
+report:
+  lookback_hours: 24     # How far back to look if no state file exists

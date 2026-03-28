@@ -1,0 +1,7 @@
+{
+  "name": "status-report",
+  "description": "Generates daily status reports from Jira, GitHub, and Claude sessions",
+  "version": "1.0.0",
+  "author": { "name": "Kostas Morfis" },
+  "license": "MIT"
+}
