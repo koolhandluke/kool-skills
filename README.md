@@ -13,17 +13,19 @@ A collection of Claude Code skills by [Kostas Morfis](https://github.com/koolhan
 
 ## Installation
 
-### Install the full collection
+### Add the marketplace
+
+First, register the kool-skills marketplace:
 
 ```sh
-claude plugin install github:koolhandluke/kool-skills
+claude plugin marketplace add koolhandluke/kool-skills
 ```
 
-### Install a single skill
+### Install a skill
 
 ```sh
-claude plugin install github:koolhandluke/kool-skills/status-report
-claude plugin install github:koolhandluke/kool-skills/example-skill
+claude plugin install status-report
+claude plugin install example-skill
 ```
 
 ### Manual install
@@ -32,8 +34,8 @@ Clone the repo and install from a local path:
 
 ```sh
 git clone https://github.com/koolhandluke/kool-skills.git
-claude plugin install ./kool-skills                   # full collection
-claude plugin install ./kool-skills/status-report     # single skill
+claude plugin marketplace add ./kool-skills
+claude plugin install status-report
 ```
 
 ## Creating a New Skill

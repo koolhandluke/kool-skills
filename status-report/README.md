@@ -5,32 +5,36 @@ Generates a daily status report from Jira, GitHub, and Claude sessions, then pos
 ## Installation
 
 ```sh
-claude plugin install github:koolhandluke/kool-skills/skills/status-report
-```
-
-Or install the full collection:
-
-```sh
-claude plugin install github:koolhandluke/kool-skills
+claude plugin marketplace add koolhandluke/kool-skills
+claude plugin install status-report
 ```
 
 ## Directory Structure
 
 ```
-skills/status-report/
-├── SKILL.md             # Skill instructions
-├── config.yaml          # User-editable credentials and settings
-├── scripts/             # Data collectors and state manager
-├── templates/           # Output templates
-│   └── template.md      # Slack message template
-├── references/          # (optional) Documentation loaded as needed
-├── assets/              # (optional) Templates, fonts, icons used in output
-└── state/               # Runtime state (last-run timestamps)
+status-report/                      # Plugin root
+├── README.md
+├── .claude-plugin/
+│   └── plugin.json                 # Plugin manifest
+└── skills/
+    └── status-report/              # Installed to ~/.claude/skills/status-report/
+        ├── SKILL.md                # Skill instructions
+        ├── config.yaml             # User-editable credentials and settings
+        ├── scripts/                # Data collectors and state manager
+        │   ├── collect-claude.sh
+        │   ├── collect-github.sh
+        │   ├── collect-jira.sh
+        │   └── state-manager.sh
+        ├── templates/              # Output templates
+        │   └── template.md         # Slack message template
+        ├── references/             # (optional) Documentation loaded as needed
+        ├── assets/                 # (optional) Icons, fonts used in output
+        └── state/                  # Runtime state (last-run timestamps)
 ```
 
 ## Setup
 
-After installing, edit `skills/status-report/config.yaml` with your credentials:
+After installing, edit `~/.claude/skills/status-report/config.yaml` with your credentials:
 
 ```yaml
 jira:
