@@ -19,7 +19,7 @@ Generates a daily status report from Jira, GitHub, and Claude sessions, then pos
    - For each GitHub item, check if its `jira_refs` array contains any ticket IDs that also appear in the Jira results
    - Annotate matched GitHub items with the Jira ticket details (status, summary)
 
-5. Load `template.md` and merge collected data into it:
+5. Load `templates/template.md` and merge collected data into it:
    - `{{JIRA_ITEMS}}`: Format Jira tickets as a bulleted list: `• <ticket_id>: <summary> [<status>] (<url>)`
    - `{{CLAUDE_SESSIONS}}`: Format Claude sessions as a bulleted list: `• <project>: <summary>`
    - `{{#SUGGESTIONS}}...{{/SUGGESTIONS}}`: Only include this section if there are suggestions (omit the block entirely if empty)

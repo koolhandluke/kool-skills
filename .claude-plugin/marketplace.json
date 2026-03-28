@@ -10,14 +10,14 @@
       "name": "example-skill",
       "description": "Use when you need an example skill template",
       "version": "1.0.0",
-      "source": "./skills/example-skill",
+      "source": "./example-skill",
       "author": { "name": "Kostas Morfis" }
     },
     {
       "name": "status-report",
       "description": "Generates daily status reports from Jira, GitHub, and Claude sessions",
       "version": "1.0.0",
-      "source": "./skills/status-report",
+      "source": "./status-report",
       "author": { "name": "Kostas Morfis" }
     }
   ]
