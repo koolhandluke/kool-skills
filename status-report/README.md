@@ -17,7 +17,7 @@ status-report/                      # Plugin root
 ├── .claude-plugin/
 │   └── plugin.json                 # Plugin manifest
 └── skills/
-    └── status-report/              # Installed to ~/.claude/skills/status-report/
+    └── generate/                   # Installed to ~/.claude/skills/generate/
         ├── SKILL.md                # Skill instructions
         ├── config.yaml             # User-editable credentials and settings
         ├── scripts/                # Data collectors and state manager
@@ -34,7 +34,7 @@ status-report/                      # Plugin root
 
 ## Setup
 
-After installing, edit `~/.claude/skills/status-report/config.yaml` with your credentials:
+After installing, edit `~/.claude/skills/generate/config.yaml` with your credentials:
 
 ```yaml
 jira:
@@ -71,7 +71,7 @@ slack:
 Invoke the skill in Claude Code:
 
 ```
-/status-report
+/status-report:generate
 ```
 
 Claude will collect activity from Jira, GitHub, and local Claude sessions since the last run, merge it into the report template, and post it to Slack.
