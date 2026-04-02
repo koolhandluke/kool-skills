@@ -19,6 +19,13 @@
       "version": "1.0.0",
       "source": "./status-report",
       "author": { "name": "Kostas Morfis" }
+    },
+    {
+      "name": "skill-scan",
+      "description": "Threat models an external agent skill from GitHub before import",
+      "version": "1.0.0",
+      "source": "./skill-scan",
+      "author": { "name": "Kostas Morfis" }
     }
   ]
 }

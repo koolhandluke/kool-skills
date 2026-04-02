@@ -1,0 +1,8 @@
+{
+  "name": "skill-scan",
+  "description": "Threat models an external agent skill from GitHub before import",
+  "version": "1.0.0",
+  "author": { "name": "Kostas Morfis" },
+  "license": "MIT",
+  "skills": "./skills/"
+}
