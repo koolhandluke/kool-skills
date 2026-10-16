@@ -1,0 +1,38 @@
+# eks-upgrade configuration. Claude reads this file and passes values to the scripts as flags.
+# Fill owner and stop_criteria before generating a production change plan.
+
+owner: ""                     # DRI who decides stop / drain / rollback (name or handle)
+change_ticket_prefix: ""      # e.g. "PESRE-" — used in plan headers
+
+# Namespaces that must be fully healthy after every step (verify.sh --namespaces)
+critical_namespaces:
+  - kube-system
+  - spinnaker
+  - flux-system
+
+# Optional Prometheus-compatible endpoint for baseline metrics (verify.sh --prom-url / --prom-query)
+metrics:
+  prom_url: ""
+  queries:
+    api_5xx_rate: 'sum(rate(apiserver_request_total{code=~"5.."}[5m]))'
+    api_p99_latency_s: 'histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{verb!~"WATCH|CONNECT"}[5m])) by (le))'
+    coredns_servfail_rate: 'sum(rate(coredns_dns_responses_total{rcode="SERVFAIL"}[5m]))'
+
+# Stop criteria evaluated by Claude after each verify run. Any hit => recommend STOP to the owner.
+stop_criteria:
+  max_new_crashloop_pods: 0
+  max_restart_increase_per_namespace: 20
+  metric_regression_pct: 25          # vs baseline, for each metrics.queries entry
+  require_e2e_smoke_pass: true       # human-run smoke (e.g. a Spinnaker pipeline) must pass
+
+# Active probes (HUMAN-RUN ONLY: verify.sh --active)
+active_probes:
+  probe_namespace: default
+  irsa_service_account: ""           # "<ns>/<sa>" to test pod credentials, e.g. "spinnaker/clouddriver"
+  probe_image: public.ecr.aws/docker/library/busybox:1.36
+  aws_cli_image: public.ecr.aws/aws-cli/aws-cli:latest
+
+# Human-run end-to-end smoke test, referenced in the change plan
+e2e_smoke:
+  description: "Run a full Spinnaker deploy pipeline to a nonprod target and confirm success"
+  command: ""                        # e.g. spin pipeline execute --name smoke --application canary

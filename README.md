@@ -9,6 +9,8 @@ A collection of Claude Code skills by [Kostas Morfis](https://github.com/koolhan
 | Skill | Description |
 |-------|-------------|
 | [status-report](status-report/) | Generates daily status reports from Jira, GitHub, and Claude sessions |
+| [skill-scan](skill-scan/) | Threat models an external agent skill from GitHub before import |
+| [eks-upgrade](eks-upgrade/) | Semi-automated, read-only assistant for in-place EKS upgrades (preflight, scan, plan, watch, verify, rollback) |
 | [example-skill](example-skill/) | Template for creating new skills |
 
 ## Installation
@@ -26,6 +28,7 @@ claude plugin marketplace add koolhandluke/kool-skills
 ```sh
 claude plugin install status-report
 claude plugin install example-skill
+claude plugin install eks-upgrade
 ```
 
 ### Manual install
