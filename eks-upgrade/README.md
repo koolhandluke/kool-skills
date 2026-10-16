@@ -1,0 +1,91 @@
+# eks-upgrade
+
+Semi-automated assistant for in-place Amazon EKS minor-version upgrades (1.32 → 1.33 → …).
+
+**Claude discovers, analyzes, drafts, watches and verifies. A human runs every mutation.**
+
+## What it does
+
+| Mode | Claude does (read-only) | Output |
+|---|---|---|
+| `preflight` | CP/node skew, AL2 node groups, add-on compatibility on target, VPC CNI ≥ 1.16.2, subnet free IPs, upgrade insights, IMDS hop limits, fail-closed webhooks, blocking PDBs, Fargate, kubectl skew | `summary.json` + `preflight-report.md` with READY / NOT READY verdict |
+| `scan` | Greps IaC/Helm/Flux/pipeline templates for `kubeProxyVersion`, AL2 AMI types & `bootstrap.sh`, removed `flowcontrol` APIs, `Endpoints` consumers, autoscaler pins, cgroup v1 assumptions | Findings grouped by severity + proposed diffs |
+| `plan` | Ordered change windows with exact human-run commands, gates, stop criteria, rollback | `change-plan.md` |
+| `watch` | Polls `describe-update` + API `/readyz` during CP / node group / add-on updates | Status transitions, API availability |
+| `verify` | Nodes, CoreDNS endpoints, CrashLoops, DaemonSets, PVC/attach errors, webhook backends, Flux readiness, critical namespaces, optional Prometheus metrics, diff vs baseline | `verify-<ts>.json` |
+| `backup-check` | Auth mode, newest AWS Backup recovery point status/age, child EBS/EFS/S3 points; reminds about external stores | Gate before OS-migration and control-plane windows |
+| `restore-test` | Isolation gate before restore (distinct cluster, separate VPC, no peering/TGW, tainted nodes), restore-job watch, "defused" gate (Flux/Spinnaker at 0) before untaint, verify on the clone | Runbook with RTO / RPO / skipped objects |
+| `rollback-check` / `rollback-plan` | 7-day window, `ROLLBACK_READINESS` insights, ordered rollback commands | Report / commands |
+
+Change windows are kept separate: OS migration (AL2 → AL2023) on the current version, pre-upgrade
+add-on bumps, control plane, a soak with nodes still at N-1, nodes, post-upgrade add-ons/autoscaler, clients.
+A fresh backup gates the OS-migration and control-plane windows.
+
+If something fails, the plan follows an escalation ladder: auto-revert → fix forward → shift back to the
+old node group → version rollback (≤ 7 days) → targeted restore → full restore/rebuild. Restore is the
+last resort: it's non-destructive (skips existing objects), doesn't change the version, and loses data
+written since the backup.
+
+## Installation
+
+```sh
+claude plugin marketplace add koolhandluke/kool-skills
+claude plugin install eks-upgrade
+```
+
+Requires `aws`, `kubectl`, `jq` (optional: `helm`, `curl` for metrics).
+
+## Guardrails (recommended)
+
+1. Run Claude with a **read-only** IAM role and a kube context bound to `view` (+ CRD read).
+2. Install the hook in the repo where you run upgrades (`.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash",    "hooks": [{ "type": "command", "command": "<plugin-path>/skills/upgrade/hooks/deny-mutations.sh" }] },
+      { "matcher": "mcp__.*", "hooks": [{ "type": "command", "command": "<plugin-path>/skills/upgrade/hooks/deny-mutations.sh" }] }
+    ]
+  }
+}
+```
+
+It blocks `aws eks update-*/create-*/delete-*`, `eksctl upgrade|drain…`, mutating `kubectl`/`helm`/`terraform`/`flux`
+verbs, `aws backup start-*/delete-*`, mutating Kubernetes MCP tools, and `verify.sh --active`. Text matching is best-effort; IAM/RBAC is the real boundary.
+
+3. Fill `skills/upgrade/config.yaml`: `owner`, `critical_namespaces`, `stop_criteria`, `backup`, `soak`,
+   `restore_test`, optional metrics.
+
+## Usage
+
+```
+/eks-upgrade:upgrade preflight my-cluster 1.33
+/eks-upgrade:upgrade scan ./infra ./charts ./spinnaker-templates
+/eks-upgrade:upgrade plan my-cluster 1.33
+/eks-upgrade:upgrade watch my-cluster --update-id <id>
+/eks-upgrade:upgrade verify my-cluster --baseline eks-upgrade-runs/my-cluster/<ts>/verify-<ts>.json
+/eks-upgrade:upgrade backup-check my-cluster
+/eks-upgrade:upgrade restore-test my-cluster my-cluster-restore-test
+/eks-upgrade:upgrade rollback-check my-cluster
+```
+
+Typical flow: `restore-test` once per cluster → baseline `verify` → `preflight` + `scan` → fix blockers (PRs)
+→ `plan` → rehearse in nonprod or on the restored clone (including a rollback) → production, with
+`backup-check` before the OS and CP windows and `watch` + `verify` after every human-run step.
+
+Scripts also run standalone, e.g.:
+
+```sh
+skills/upgrade/scripts/preflight.sh --cluster my-cluster --region us-west-2 --target 1.33
+skills/upgrade/scripts/verify.sh --namespaces kube-system,spinnaker --baseline <file>
+```
+
+## Notes
+
+- Version facts in `references/` were verified 2026-10-16. The skill re-checks lifecycle, add-on versions
+  and insights live; don't treat the reference files as current.
+- AWS Backup for EKS availability in GovCloud and cross-account copy of EKS recovery points were not
+  verified; check before relying on them for FedRAMP clusters (Velero is the fallback).
+- Restore tests must stay inside the source cluster's authorization boundary.
+- "Pods Ready" is not success: verify PASS + baseline within thresholds + human-run e2e smoke.

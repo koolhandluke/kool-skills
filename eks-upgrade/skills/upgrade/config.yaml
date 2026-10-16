@@ -1,0 +1,60 @@
+# eks-upgrade configuration. Claude reads this file and passes values to the scripts as flags.
+# Fill owner and stop_criteria before generating a production change plan.
+
+owner: ""                     # DRI who decides stop / drain / rollback (name or handle)
+change_ticket_prefix: ""      # e.g. "PESRE-" — used in plan headers
+
+# Namespaces that must be fully healthy after every step (verify.sh --namespaces)
+critical_namespaces:
+  - kube-system
+  - spinnaker
+  - flux-system
+
+# Optional Prometheus-compatible endpoint for baseline metrics (verify.sh --prom-url / --prom-query)
+metrics:
+  prom_url: ""
+  queries:
+    api_5xx_rate: 'sum(rate(apiserver_request_total{code=~"5.."}[5m]))'
+    api_p99_latency_s: 'histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{verb!~"WATCH|CONNECT"}[5m])) by (le))'
+    coredns_servfail_rate: 'sum(rate(coredns_dns_responses_total{rcode="SERVFAIL"}[5m]))'
+
+# Stop criteria evaluated by Claude after each verify run. Any hit => recommend STOP to the owner.
+stop_criteria:
+  max_new_crashloop_pods: 0
+  max_restart_increase_per_namespace: 20
+  metric_regression_pct: 25          # vs baseline, for each metrics.queries entry
+  require_e2e_smoke_pass: true       # human-run smoke (e.g. a Spinnaker pipeline) must pass
+
+# Active probes (HUMAN-RUN ONLY: verify.sh --active)
+active_probes:
+  probe_namespace: default
+  irsa_service_account: ""           # "<ns>/<sa>" to test pod credentials, e.g. "spinnaker/clouddriver"
+  probe_image: public.ecr.aws/docker/library/busybox:1.36
+  aws_cli_image: public.ecr.aws/aws-cli/aws-cli:latest
+
+# Human-run end-to-end smoke test, referenced in the change plan
+e2e_smoke:
+  description: "Run a full Spinnaker deploy pipeline to a nonprod target and confirm success"
+  command: ""                        # e.g. spin pipeline execute --name smoke --application canary
+
+# Backups (AWS Backup for EKS). backup-check gates each change window.
+backup:
+  vault: ""                          # restrict to this vault (optional)
+  max_age_hours: 6                   # recovery point must be newer than this at the start of a window
+  external_stores:                   # snapshot these at the same time; AWS Backup for EKS does not cover them
+    - "Spinnaker storage (Front50 S3/SQL, Redis/Orca SQL)"
+    - "RDS / ElastiCache used by in-cluster apps"
+
+# Soak between control-plane upgrade and node upgrades. Nodes stay at N-1 so a CP rollback
+# needs no node rollback first.
+soak:
+  hours_after_control_plane: 24
+
+# Restore test (backup -> isolated cluster). All mutating steps are human-run.
+restore_test:
+  target_cluster: ""                 # pre-created, same version, isolated VPC, inside the same authorization boundary
+  target_context: ""
+  taint_key: restore-test            # every target node group: restore-test=true:NoSchedule
+  deployer_namespaces:               # scaled to 0 before untainting
+    - flux-system
+    - spinnaker

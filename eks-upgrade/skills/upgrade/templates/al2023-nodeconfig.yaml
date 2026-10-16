@@ -1,0 +1,38 @@
+# AL2023 nodeadm NodeConfig — replaces AL2 /etc/eks/bootstrap.sh
+# Ref: https://awslabs.github.io/amazon-eks-ami/nodeadm/ , https://docs.aws.amazon.com/eks/latest/userguide/al2023.html
+#
+# Managed node group + EKS-optimized AL2023 AMI (no custom AMI):
+#   EKS injects cluster metadata itself. Only include a NodeConfig for kubelet overrides
+#   (labels/taints/maxPods) as an extra MIME part in the launch template user data.
+#
+# Custom AMI or self-managed nodes:
+#   The full spec.cluster block below is REQUIRED (name, apiServerEndpoint, certificateAuthority, cidr).
+#   Fill from: aws eks describe-cluster --name <c> --query 'cluster.{ep:endpoint,ca:certificateAuthority.data,cidr:kubernetesNetworkConfig.serviceIpv4Cidr}'
+#
+# Launch template settings to review alongside this file:
+#   MetadataOptions: HttpTokens=required, HttpPutResponseHopLimit=2 if any pod still uses node-role creds
+#   (prefer IRSA / EKS Pod Identity and keep hop limit 1).
+
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: application/node.eks.aws
+
+---
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  cluster:                       # REQUIRED for custom AMI / self-managed only
+    name: <CLUSTER_NAME>
+    apiServerEndpoint: <ENDPOINT>
+    certificateAuthority: <BASE64_CA>
+    cidr: <SERVICE_IPV4_CIDR>
+  kubelet:
+    config:
+      maxPods: <MAX_PODS>        # match prefix delegation / ENI math used on AL2
+    flags:
+      - --node-labels=<KEY>=<VALUE>
+      - --register-with-taints=<KEY>=<VALUE>:NoSchedule
+
+--BOUNDARY--
