@@ -79,21 +79,29 @@ pre)
       else check egress-routes WARN "Internet egress present ($r): restored apps can reach public prod endpoints; prefer VPC endpoints only"; fi
 
       # node group taints
-      NGS=$("${AWSC[@]}" eks list-nodegroups --cluster-name "$TARGET" | jq -r '.nodegroups[]')
-      if [[ -z "$NGS" ]]; then
-        check node-taints PASS "no managed node groups (pods will stay Pending)"
+      if NG_JSON=$("${AWSC[@]}" eks list-nodegroups --cluster-name "$TARGET" 2>/dev/null); then
+        NGS=$(jq -r '.nodegroups[]' <<<"$NG_JSON")
+        if [[ -z "$NGS" ]]; then
+          check node-taints PASS "no managed node groups (pods will stay Pending)"
+        else
+          untainted=""
+          for ng in $NGS; do
+            t=$("${AWSC[@]}" eks describe-nodegroup --cluster-name "$TARGET" --nodegroup-name "$ng" \
+                | jq -r --arg k "$TAINT" '[.nodegroup.taints[]? | select(.key==$k and .effect=="NO_SCHEDULE")] | length')
+            [[ "$t" == 0 ]] && untainted+="$ng "
+          done
+          [[ -z "$untainted" ]] && check node-taints PASS "all node groups tainted $TAINT:NoSchedule" \
+            || check node-taints BLOCK "Node groups without $TAINT:NoSchedule taint: $untainted"
+        fi
       else
-        untainted=""
-        for ng in $NGS; do
-          t=$("${AWSC[@]}" eks describe-nodegroup --cluster-name "$TARGET" --nodegroup-name "$ng" \
-              | jq -r --arg k "$TAINT" '[.nodegroup.taints[]? | select(.key==$k and .effect=="NO_SCHEDULE")] | length')
-          [[ "$t" == 0 ]] && untainted+="$ng "
-        done
-        [[ -z "$untainted" ]] && check node-taints PASS "all node groups tainted $TAINT:NoSchedule" \
-          || check node-taints BLOCK "Node groups without $TAINT:NoSchedule taint: $untainted"
+        check node-taints SKIP "list-nodegroups failed; cannot verify taints"
       fi
-      fg=$("${AWSC[@]}" eks list-fargate-profiles --cluster-name "$TARGET" | jq '.fargateProfileNames|length')
-      [[ "$fg" == 0 ]] || check fargate BLOCK "Target has Fargate profiles; matching pods would start immediately"
+      if FG_JSON=$("${AWSC[@]}" eks list-fargate-profiles --cluster-name "$TARGET" 2>/dev/null); then
+        fg=$(jq '.fargateProfileNames|length' <<<"$FG_JSON")
+        [[ "$fg" == 0 ]] || check fargate BLOCK "Target has Fargate profiles; matching pods would start immediately"
+      else
+        check fargate SKIP "list-fargate-profiles failed; cannot verify Fargate isolation"
+      fi
     fi
   fi
   ;;

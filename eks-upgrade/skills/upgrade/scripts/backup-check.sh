@@ -5,7 +5,7 @@ set -uo pipefail
 #
 # Usage:
 #   ./backup-check.sh --cluster <name> [--region <r>] [--max-age-hours <n, default 6>]
-#                     [--vault <name>] [--out <dir>]
+#                     [--vault <name>] [--external-stores <csv>] [--out <dir>]
 #
 # Checks:
 #   auth-mode          cluster accessConfig.authenticationMode is API or API_AND_CONFIG_MAP
@@ -15,19 +15,37 @@ set -uo pipefail
 # Output: <out>/backup-check.json {cluster, latest:{arn,created,status,vault,ageHours}, checks:[...]}
 # Exit: 0 no BLOCK, 2 BLOCK, 1 usage error.
 
-CLUSTER="" REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}" MAXAGE=6 VAULT="" OUT=""
+CLUSTER="" REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}" MAXAGE=6 VAULT="" OUT="" EXTERNAL_STORES=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --cluster)       CLUSTER="$2"; shift 2 ;;
-    --region)        REGION="$2"; shift 2 ;;
-    --max-age-hours) MAXAGE="$2"; shift 2 ;;
-    --vault)         VAULT="$2"; shift 2 ;;
-    --out)           OUT="$2"; shift 2 ;;
+    --cluster)          CLUSTER="$2"; shift 2 ;;
+    --region)           REGION="$2"; shift 2 ;;
+    --max-age-hours)    MAXAGE="$2"; shift 2 ;;
+    --vault)            VAULT="$2"; shift 2 ;;
+    --out)              OUT="$2"; shift 2 ;;
+    --external-stores)  EXTERNAL_STORES="$2"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 [[ -z "$CLUSTER" || -z "$REGION" ]] && { echo "Usage: $0 --cluster <c> --region <r> [--max-age-hours n] [--vault v]" >&2; exit 1; }
-for bin in aws jq; do command -v "$bin" >/dev/null || { echo "Missing required tool: $bin" >&2; exit 1; }; done
+for bin in aws jq python3; do command -v "$bin" >/dev/null || { echo "Missing required tool: $bin" >&2; exit 1; }; done
+
+# Cross-platform ISO-8601 / epoch timestamp → epoch seconds (works on macOS + Linux)
+to_epoch() {
+  local ts="$1"
+  if [[ "$ts" =~ ^[0-9.]+$ ]]; then echo "${ts%.*}"; return; fi
+  python3 -c "
+import sys, datetime as dt
+s = sys.argv[1]
+for fmt in ('%Y-%m-%dT%H:%M:%S%z','%Y-%m-%dT%H:%M:%SZ','%Y-%m-%dT%H:%M:%S.%f%z','%Y-%m-%dT%H:%M:%S.%fZ','%Y-%m-%dT%H:%M:%S'):
+    try:
+        d = dt.datetime.strptime(s, fmt)
+        if d.tzinfo is None: d = d.replace(tzinfo=dt.timezone.utc)
+        print(int(d.timestamp())); sys.exit(0)
+    except ValueError: pass
+print(0)
+" "$ts" 2>/dev/null || echo 0
+}
 
 OUT="${OUT:-./eks-upgrade-runs/$CLUSTER/$(date -u +%Y%m%dT%H%M%SZ)}"; mkdir -p "$OUT"
 AWSC=(aws --region "$REGION" --output json)
@@ -54,7 +72,7 @@ if RP=$("${AWSC[@]}" backup list-recovery-points-by-resource --resource-arn "$AR
     check recovery-point BLOCK "No completed recovery point for $ARN${VAULT:+ in vault $VAULT}"
   else
     created=$(jq -r '.CreationDate' <<<"$LATEST")
-    if [[ "$created" =~ ^[0-9.]+$ ]]; then epoch=${created%.*}; else epoch=$(date -d "$created" +%s 2>/dev/null || echo 0); fi
+    epoch=$(to_epoch "$created")
     age=$(( ( $(date +%s) - epoch ) / 3600 ))
     status=$(jq -r '.Status' <<<"$LATEST")
     LATEST=$(jq --argjson a "$age" '. + {ageHours:$a}' <<<"$LATEST")
@@ -81,7 +99,9 @@ else
   check recovery-point SKIP "list-recovery-points-by-resource failed: $(head -c 200 <<<"$RP")"
 fi
 
-check external-stores WARN "AWS Backup for EKS covers cluster state + PVC-attached EBS/EFS/S3 only. Confirm same-time snapshots of external stores (RDS, Redis, Spinnaker storage) listed in config.yaml backup.external_stores."
+if [[ -n "$EXTERNAL_STORES" ]]; then
+  check external-stores WARN "AWS Backup for EKS covers cluster state + PVC-attached EBS/EFS/S3 only. Confirm same-time snapshots of external stores: $EXTERNAL_STORES"
+fi
 
 jq -s --arg c "$CLUSTER" --arg arn "$ARN" --argjson l "$LATEST" \
   '{cluster:$c, clusterArn:$arn, latest:$l, checks:., counts:(group_by(.status)|map({key:.[0].status,value:length})|from_entries)}' \

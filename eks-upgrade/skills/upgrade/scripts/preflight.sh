@@ -119,14 +119,13 @@ fi
 
 # --- managed node groups / AMI type / IMDS -------------------------------
 if "${AWSC[@]}" eks list-nodegroups --cluster-name "$CLUSTER" > "$OUT/nodegroups-list.json" 2>/dev/null; then
-  echo '[]' > "$OUT/nodegroups.json"
   for ng in $(jq -r '.nodegroups[]' "$OUT/nodegroups-list.json"); do
     "${AWSC[@]}" eks describe-nodegroup --cluster-name "$CLUSTER" --nodegroup-name "$ng" \
       | jq '.nodegroup | {name:.nodegroupName, version, releaseVersion, amiType, capacityType, status,
-            scaling:.scalingConfig, launchTemplate, updateConfig, health:.health.issues}' > "$OUT/.ng.json"
-    jq -s '.[0] + [.[1]]' "$OUT/nodegroups.json" "$OUT/.ng.json" > "$OUT/.ngs.json" && mv "$OUT/.ngs.json" "$OUT/nodegroups.json"
+            scaling:.scalingConfig, launchTemplate, updateConfig, health:.health.issues}' > "$OUT/.ng-${ng}.json"
   done
-  rm -f "$OUT/.ng.json"
+  jq -s '.' "$OUT"/.ng-*.json > "$OUT/nodegroups.json" 2>/dev/null || echo '[]' > "$OUT/nodegroups.json"
+  rm -f "$OUT"/.ng-*.json
   AL2=$(jq -r '[.[]|select((.amiType // "")|startswith("AL2_"))|"\(.name)(\(.amiType))"]|join(", ")' "$OUT/nodegroups.json")
   CUSTOM=$(jq -r '[.[]|select(.amiType=="CUSTOM")|.name]|join(", ")' "$OUT/nodegroups.json")
   NGSKEW=$(jq -r --arg cp "$CURRENT" '[.[]|select(.version!=$cp)|"\(.name)=\(.version)"]|join(", ")' "$OUT/nodegroups.json")
@@ -164,6 +163,30 @@ if "${AWSC[@]}" eks list-fargate-profiles --cluster-name "$CLUSTER" > "$OUT/farg
   n=$(jq '.fargateProfileNames|length' "$OUT/fargate.json")
   (( n > 0 )) && check fargate WARN "$n Fargate profile(s): pods keep old kubelet until redeployed; rollback requires deleting newer Fargate pods." \
               || check fargate PASS "No Fargate profiles"
+fi
+
+# --- Karpenter ------------------------------------------------------------
+if (( KUBE_OK )); then
+  HAS_EC2NC=$("${KUBECTL[@]}" api-resources --api-group=karpenter.k8s.aws -o name 2>/dev/null | grep -c ec2nodeclass || true)
+  HAS_NP=$("${KUBECTL[@]}" api-resources --api-group=karpenter.sh -o name 2>/dev/null | grep -c nodepool || true)
+  if (( HAS_EC2NC > 0 )); then
+    "${KUBECTL[@]}" get ec2nodeclass.karpenter.k8s.aws -A -o json > "$OUT/karpenter-ec2nodeclasses.json" 2>/dev/null || echo '{"items":[]}' > "$OUT/karpenter-ec2nodeclasses.json"
+    KAL2=$(jq -r '[.items[] | select((.spec.amiFamily // "") == "AL2") | .metadata.name] | join(", ")' "$OUT/karpenter-ec2nodeclasses.json")
+    if [[ -n "$KAL2" ]]; then
+      if ver_ge "$TARGET" "1.33"; then
+        check karpenter-ami BLOCK "Karpenter EC2NodeClass with AL2 amiFamily has no AMI for $TARGET: $KAL2. Migrate to AL2023/Bottlerocket on $CURRENT first."
+      else
+        check karpenter-ami WARN "Karpenter EC2NodeClass with AL2 amiFamily (EOL, plan migration): $KAL2"
+      fi
+    else
+      check karpenter-ami PASS "No Karpenter EC2NodeClass using AL2"
+    fi
+  fi
+  if (( HAS_NP > 0 )); then
+    "${KUBECTL[@]}" get nodepool.karpenter.sh -A -o json > "$OUT/karpenter-nodepools.json" 2>/dev/null || echo '{"items":[]}' > "$OUT/karpenter-nodepools.json"
+    n=$(jq '.items | length' "$OUT/karpenter-nodepools.json")
+    (( n > 0 )) && check karpenter-nodepools PASS "$n Karpenter NodePool(s) captured for inventory"
+  fi
 fi
 
 # --- add-ons --------------------------------------------------------------

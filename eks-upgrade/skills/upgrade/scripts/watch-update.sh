@@ -7,13 +7,13 @@ set -uo pipefail
 # Usage:
 #   ./watch-update.sh --cluster <name> --update-id <id> [--region <r>]
 #                     [--nodegroup <ng> | --addon <addon>] [--context <kube-ctx>]
-#                     [--interval <sec, default 30>] [--log <file>]
+#                     [--interval <sec, default 30>] [--timeout <sec, default 7200>] [--log <file>]
 #
 # Output:
 #   NDJSON lines to stdout (and --log): {ts, status, apiReady, errors}
-# Exit: 0 Successful, 1 Failed/Cancelled, 3 usage error
+# Exit: 0 Successful, 1 Failed/Cancelled, 2 timeout, 3 usage error
 
-CLUSTER="" ID="" REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}" NG="" ADDON="" CONTEXT="" INTERVAL=30 LOG=""
+CLUSTER="" ID="" REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}" NG="" ADDON="" CONTEXT="" INTERVAL=30 TIMEOUT=7200 LOG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --cluster)   CLUSTER="$2"; shift 2 ;;
@@ -23,6 +23,7 @@ while [[ $# -gt 0 ]]; do
     --addon)     ADDON="$2"; shift 2 ;;
     --context)   CONTEXT="$2"; shift 2 ;;
     --interval)  INTERVAL="$2"; shift 2 ;;
+    --timeout)   TIMEOUT="$2"; shift 2 ;;
     --log)       LOG="$2"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 3 ;;
   esac
@@ -34,8 +35,13 @@ ARGS=(--region "$REGION" --output json eks describe-update --name "$CLUSTER" --u
 [[ -n "$ADDON" ]] && ARGS+=(--addon-name "$ADDON")
 KUBECTL=(kubectl); [[ -n "$CONTEXT" ]] && KUBECTL+=(--context "$CONTEXT")
 
-last=""; apifail=0; polls=0
+last=""; apifail=0; polls=0; start_epoch=$(date +%s)
 while true; do
+  elapsed=$(( $(date +%s) - start_epoch ))
+  if (( elapsed >= TIMEOUT )); then
+    echo "{\"final\":\"Timeout\",\"polls\":$polls,\"apiReadyFailures\":$apifail,\"elapsedSeconds\":$elapsed}"
+    exit 2
+  fi
   ts=$(date -u +%FT%TZ)
   u=$(aws "${ARGS[@]}" 2>&1) || u='{"update":{"status":"PollError","errors":[{"errorMessage":"describe-update failed"}]}}'
   status=$(jq -r '.update.status' <<<"$u" 2>/dev/null || echo PollError)
