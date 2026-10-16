@@ -5,7 +5,7 @@ set -uo pipefail
 #
 # Usage:
 #   ./backup-check.sh --cluster <name> [--region <r>] [--max-age-hours <n, default 6>]
-#                     [--vault <name>] [--out <dir>]
+#                     [--vault <name>] [--external-stores <csv>] [--out <dir>]
 #
 # Checks:
 #   auth-mode          cluster accessConfig.authenticationMode is API or API_AND_CONFIG_MAP
@@ -15,14 +15,15 @@ set -uo pipefail
 # Output: <out>/backup-check.json {cluster, latest:{arn,created,status,vault,ageHours}, checks:[...]}
 # Exit: 0 no BLOCK, 2 BLOCK, 1 usage error.
 
-CLUSTER="" REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}" MAXAGE=6 VAULT="" OUT=""
+CLUSTER="" REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}" MAXAGE=6 VAULT="" OUT="" EXTERNAL_STORES=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --cluster)       CLUSTER="$2"; shift 2 ;;
-    --region)        REGION="$2"; shift 2 ;;
-    --max-age-hours) MAXAGE="$2"; shift 2 ;;
-    --vault)         VAULT="$2"; shift 2 ;;
-    --out)           OUT="$2"; shift 2 ;;
+    --cluster)          CLUSTER="$2"; shift 2 ;;
+    --region)           REGION="$2"; shift 2 ;;
+    --max-age-hours)    MAXAGE="$2"; shift 2 ;;
+    --vault)            VAULT="$2"; shift 2 ;;
+    --out)              OUT="$2"; shift 2 ;;
+    --external-stores)  EXTERNAL_STORES="$2"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -98,7 +99,9 @@ else
   check recovery-point SKIP "list-recovery-points-by-resource failed: $(head -c 200 <<<"$RP")"
 fi
 
-check external-stores WARN "AWS Backup for EKS covers cluster state + PVC-attached EBS/EFS/S3 only. Confirm same-time snapshots of external stores (RDS, Redis, Spinnaker storage) listed in config.yaml backup.external_stores."
+if [[ -n "$EXTERNAL_STORES" ]]; then
+  check external-stores WARN "AWS Backup for EKS covers cluster state + PVC-attached EBS/EFS/S3 only. Confirm same-time snapshots of external stores: $EXTERNAL_STORES"
+fi
 
 jq -s --arg c "$CLUSTER" --arg arn "$ARN" --argjson l "$LATEST" \
   '{cluster:$c, clusterArn:$arn, latest:$l, checks:., counts:(group_by(.status)|map({key:.[0].status,value:length})|from_entries)}' \

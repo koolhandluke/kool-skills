@@ -4,14 +4,14 @@ set -euo pipefail
 # Scans IaC / Helm / Flux / pipeline templates / scripts for upgrade hazards.
 #
 # Usage:
-#   ./scan-repo.sh [--target <minor>] <path> [<path>...]
+#   ./scan-repo.sh --target <minor> <path> [<path>...]
 #
 # Output:
 #   JSON array to stdout:
 #   [{ "rule": "...", "severity": "high|medium|low", "file": "...", "line": 12,
 #      "text": "...", "why": "..." }]
 
-TARGET="1.33"
+TARGET=""
 PATHS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,7 +20,8 @@ while [[ $# -gt 0 ]]; do
     *) PATHS+=("$1"); shift ;;
   esac
 done
-[[ ${#PATHS[@]} -eq 0 ]] && { echo "Usage: $0 [--target <minor>] <path>..." >&2; exit 1; }
+[[ -z "$TARGET" ]] && { echo "Usage: $0 --target <minor> <path>..." >&2; exit 1; }
+[[ ${#PATHS[@]} -eq 0 ]] && { echo "Usage: $0 --target <minor> <path>..." >&2; exit 1; }
 command -v jq >/dev/null || { echo "Missing required tool: jq" >&2; exit 1; }
 
 # rule~severity~ERE pattern~why  ('~' delimiter: patterns may contain '|')

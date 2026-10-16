@@ -49,6 +49,7 @@ aws eks update-cluster-version --name {{CLUSTER}} --kubernetes-version {{TARGET}
 
 ## Soak — {{SOAK_HOURS}}h, nodes stay at {{CURRENT}}
 - Nodes at N-1 keep a CP rollback single-step (no node rollback first)
+- [ ] Human: set a calendar reminder at the soak midpoint ({{SOAK_HOURS}}/2 hours from now) to review verify output
 - [ ] Claude: verify vs baseline at start, midpoint, end
 - Gate: no stop criteria hit for the full soak; owner sign-off to proceed
 
