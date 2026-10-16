@@ -73,6 +73,9 @@ else
   check target-version BLOCK "Target $TARGET is not exactly one minor above $CURRENT"
 fi
 check support-policy PASS "upgradePolicy.supportType=$SUPPORT, platformVersion=$(jq -r '.cluster.platformVersion' "$OUT/cluster.json")"
+AUTHMODE=$(jq -r '.cluster.accessConfig.authenticationMode // "CONFIG_MAP"' "$OUT/cluster.json")
+[[ "$AUTHMODE" == API || "$AUTHMODE" == API_AND_CONFIG_MAP ]] && check auth-mode PASS "$AUTHMODE" \
+  || check auth-mode WARN "authenticationMode=$AUTHMODE: AWS Backup for EKS needs API or API_AND_CONFIG_MAP; run backup-check before the CP window"
 
 # --- in-flight updates ----------------------------------------------------
 if "${AWSC[@]}" eks list-updates --name "$CLUSTER" > "$OUT/updates.json" 2>/dev/null; then

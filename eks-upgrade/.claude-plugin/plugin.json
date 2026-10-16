@@ -1,7 +1,7 @@
 {
   "name": "eks-upgrade",
-  "description": "Semi-automated, read-only Claude assistant for in-place EKS minor-version upgrades: preflight, repo scan, change plan, watch, verify, rollback readiness",
-  "version": "1.0.0",
+  "description": "Semi-automated, read-only Claude assistant for in-place EKS minor-version upgrades: preflight, repo scan, change plan, watch, verify, backup gate, restore test, rollback readiness",
+  "version": "1.1.0",
   "author": { "name": "Kostas Morfis" },
   "license": "MIT",
   "skills": "./skills/"

@@ -31,6 +31,7 @@ shopt -s nocasematch
 patterns=(
   'aws[[:space:]].*eks[[:space:]]+(update-|create-|delete-|associate-|disassociate-|tag-|untag-|register-|deregister-|start-insights-refresh)'
   'aws[[:space:]].*(ec2|autoscaling)[[:space:]]+(create-|delete-|modify-|terminate-|run-instances|update-|set-|attach-|detach-)'
+  'aws[[:space:]].*backup[[:space:]]+(start-|stop-|delete-|update-|put-|create-|disassociate-|cancel-)'
   'eksctl[[:space:]]+(upgrade|create|delete|drain|scale|update|set|unset|enable|disable)'
   'kubectl([[:space:]].*)?[[:space:]](apply|create|delete|replace|patch|edit|scale|drain|cordon|uncordon|taint|label|annotate|set|run|expose|autoscale|debug|exec|cp)([[:space:]]|$)'
   'kubectl([[:space:]].*)?[[:space:]]rollout[[:space:]]+(restart|undo|pause|resume)'

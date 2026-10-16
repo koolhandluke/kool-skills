@@ -49,6 +49,11 @@ Bypasses insight checks (ERROR/WARNING/UNKNOWN) only. Does not bypass the 7-day 
 check, N-1 rule, or feature compatibility. On Auto Mode it does not override PDBs or NodePool budgets.
 Never a first resort: resolve the insight instead.
 
+## Where rollback sits
+
+Step 4 of the escalation ladder in backup-restore.md: auto-revert → fix forward → shift back nodes →
+**version rollback** → targeted restore → full restore/rebuild.
+
 ## What rollback is not
 
 Not a data restore. etcd contents, workloads, PVs and add-on versions remain. Objects written with
