@@ -27,7 +27,24 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -z "$CLUSTER" || -z "$REGION" ]] && { echo "Usage: $0 --cluster <c> --region <r> [--max-age-hours n] [--vault v]" >&2; exit 1; }
-for bin in aws jq; do command -v "$bin" >/dev/null || { echo "Missing required tool: $bin" >&2; exit 1; }; done
+for bin in aws jq python3; do command -v "$bin" >/dev/null || { echo "Missing required tool: $bin" >&2; exit 1; }; done
+
+# Cross-platform ISO-8601 / epoch timestamp → epoch seconds (works on macOS + Linux)
+to_epoch() {
+  local ts="$1"
+  if [[ "$ts" =~ ^[0-9.]+$ ]]; then echo "${ts%.*}"; return; fi
+  python3 -c "
+import sys, datetime as dt
+s = sys.argv[1]
+for fmt in ('%Y-%m-%dT%H:%M:%S%z','%Y-%m-%dT%H:%M:%SZ','%Y-%m-%dT%H:%M:%S.%f%z','%Y-%m-%dT%H:%M:%S.%fZ','%Y-%m-%dT%H:%M:%S'):
+    try:
+        d = dt.datetime.strptime(s, fmt)
+        if d.tzinfo is None: d = d.replace(tzinfo=dt.timezone.utc)
+        print(int(d.timestamp())); sys.exit(0)
+    except ValueError: pass
+print(0)
+" "$ts" 2>/dev/null || echo 0
+}
 
 OUT="${OUT:-./eks-upgrade-runs/$CLUSTER/$(date -u +%Y%m%dT%H%M%SZ)}"; mkdir -p "$OUT"
 AWSC=(aws --region "$REGION" --output json)
@@ -54,7 +71,7 @@ if RP=$("${AWSC[@]}" backup list-recovery-points-by-resource --resource-arn "$AR
     check recovery-point BLOCK "No completed recovery point for $ARN${VAULT:+ in vault $VAULT}"
   else
     created=$(jq -r '.CreationDate' <<<"$LATEST")
-    if [[ "$created" =~ ^[0-9.]+$ ]]; then epoch=${created%.*}; else epoch=$(date -d "$created" +%s 2>/dev/null || echo 0); fi
+    epoch=$(to_epoch "$created")
     age=$(( ( $(date +%s) - epoch ) / 3600 ))
     status=$(jq -r '.Status' <<<"$LATEST")
     LATEST=$(jq --argjson a "$age" '. + {ageHours:$a}' <<<"$LATEST")
